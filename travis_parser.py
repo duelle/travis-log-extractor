@@ -7,8 +7,8 @@ from shutil import copy2
 from travis_project import TravisProject
 import travis_job_helper
 
-input_folder = "/tmp/travis_parser/input"
-output_folder = "/tmp/travis_parser/output"
+input_folder = "/tmp/travis_parser/input/"
+output_folder = "/tmp/travis_parser/output/"
 
 repo_data_file = "repo-data-travis.csv"
 build_log_file = "buildlog-data-travis.csv"
@@ -28,7 +28,7 @@ def process_project(project_folder):
 
 
 def create_project(project_folder):
-    project_folder_name = os.path.basename(os.path.dirname(project_folder))
+    project_folder_name = os.path.basename(os.path.basename(project_folder))
 
     project_info = project_folder_name.split('@')
     project_org = str(project_info[0])
@@ -40,7 +40,7 @@ def create_project(project_folder):
 def process_jobs(project_folder):
     job_list = []
 
-    log_listing = glob.glob(project_folder + "*.log")
+    log_listing = glob.glob(project_folder + os.sep + "*.log")
     for log_file in log_listing:
         job = travis_job_helper.parse_job_log_file(log_file)
         job_list.append(job)
@@ -85,12 +85,19 @@ def main():
     project_list = []
     job_list = []
 
-    for f in input_folder:
+    folder_list = glob.glob(input_folder + os.sep + "*")
+
+    for f in folder_list:
         if os.path.isdir(f):
             project = process_project(f)
             job_list = process_jobs(f)
             project.assign_jobs(job_list)
+            for line in project.get_as_csv():
+                print(line)
             project_list.append(project)
+
+    print(TravisProject.get_csv_header())
+
     merge_repo_data_files()
     merge_build_log_files()
 
