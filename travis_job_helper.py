@@ -155,15 +155,18 @@ def parse_job_log_file(log_file_path):
                     duration_timings = timings.split(',')[2]
                     duration_value = int(duration_timings.split('=')[1])
 
+                    # Milliseconds
+                    duration_value_ms = duration_value / 1000000
+
                     if job_step_first_start is None:
                         job_step_first_start = __convert_timestamp_to_datetime(start_value)
 
                     job_step_last_end = __convert_timestamp_to_datetime(finish_value)
 
                     if job_duration_aggregated_timestamp is None:
-                        job_duration_aggregated_timestamp = duration_value
+                        job_duration_aggregated_timestamp = duration_value_ms
                     else:
-                        job_duration_aggregated_timestamp += duration_value
+                        job_duration_aggregated_timestamp += duration_value_ms
 
                     job_duration_diff_timestamp = (job_step_last_end - job_step_first_start).total_seconds()
 

@@ -1,28 +1,36 @@
 #!/usr/bin/env python
 
+from concurrent.futures import ProcessPoolExecutor, as_completed
 import glob
 import os
-from shutil import copy2
+import time
+from shutil import copyfileobj
+
 
 from travis_project import TravisProject
 import travis_job_helper
 
-input_folder = "/tmp/travis_parser/input/"
-output_folder = "/tmp/travis_parser/output/"
+input_folder = "input/"
+output_folder = "output/"
 
 repo_data_file = "repo-data-travis.csv"
 build_log_file = "buildlog-data-travis.csv"
+extracted_data_file = "extracted.csv"
 
-
-if not os.path.exists(output_folder):
-    os.makedirs(output_folder)
+parallel_enabled = True
+parallel_workers = 8
 
 
 def process_project(project_folder):
     project = create_project(project_folder)
-    process_jobs(project_folder)
+
+    job_list = process_jobs(project_folder)
+    project.assign_jobs(job_list)
+
     copy_repo_data_file(project_folder)
     copy_build_log_file(project_folder)
+
+    write_to_csv(project)
 
     return project
 
@@ -55,51 +63,104 @@ def create_dir_if_not_exists(path):
 
 def copy_repo_data_file(project_folder):
     repo_log_source_file = project_folder + os.sep + repo_data_file
-    repo_log_destination_file = output_folder + os.sep + project_folder + os.sep + repo_data_file
+    repo_log_destination_file = output_folder + os.sep + os.path.basename(project_folder) + os.sep + repo_data_file
 
     create_dir_if_not_exists(os.path.dirname(repo_log_destination_file))
 
     if os.path.isfile(repo_log_source_file):
-        copy2(repo_log_source_file, repo_log_destination_file)
+        remove_tz_label(repo_log_source_file, repo_log_destination_file)
 
 
 def copy_build_log_file(project_folder):
     build_log_source_file = project_folder + os.sep + build_log_file
-    build_log_destination_file = output_folder + os.sep + project_folder + os.sep + build_log_file
+    build_log_destination_file = output_folder + os.sep + os.path.basename(project_folder) + os.sep + build_log_file
 
     create_dir_if_not_exists(os.path.dirname(build_log_destination_file))
 
     if os.path.isfile(build_log_source_file):
-        copy2(build_log_source_file, build_log_destination_file)
+        # copy2(build_log_source_file, build_log_destination_file)
+        remove_tz_label(build_log_source_file, build_log_destination_file)
 
 
-def merge_repo_data_files():
-    None
+def merge_log_files(project_list, file_name):
+
+    header_added = False
+    with open(output_folder + os.sep + file_name, "wb") as out_file:
+        for project in project_list:
+            with open(output_folder + os.sep + project.project_folder + os.sep + file_name, "rb") as in_file:
+                if header_added:
+                    in_file.__next__()
+                else:
+                    header_added = True
+                copyfileobj(in_file, out_file)
 
 
-def merge_build_log_files():
-    None
+def remove_tz_label(source_file, out_file):
+    """
+    Copy content from source_file to out_file while removing the timezone label.
+    :param source_file: Source file
+    :param out_file: destination file
+    :return: No return value
+    """
+    first_line = True
+
+    with open(source_file, "r") as infile:
+        with open(out_file, "w") as outfile:
+            for line_in in infile:
+                if first_line:
+                    outfile.write(line_in)
+                    first_line = False
+                else:
+                    outfile.write(line_in.replace(' UTC,', ','))
+
+
+def write_to_csv(project):
+    destination_csv_file = output_folder + os.sep + project.project_folder + os.sep + "extracted.csv"
+    with open(destination_csv_file, 'w') as csv_file:
+        csv_file.writelines(project.get_as_csv(with_header=True))
 
 
 def main():
     project_list = []
-    job_list = []
 
-    folder_list = glob.glob(input_folder + os.sep + "*")
+    file_names = [extracted_data_file, build_log_file, repo_data_file]
 
-    for f in folder_list:
-        if os.path.isdir(f):
-            project = process_project(f)
-            job_list = process_jobs(f)
-            project.assign_jobs(job_list)
-            for line in project.get_as_csv():
-                print(line)
+    start_time = time.time()
+
+    # All folders in the input_folder directory
+    folder_list = [item for item in glob.glob(input_folder + os.sep + "*") if os.path.isdir(item)]
+
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+
+    if parallel_enabled:
+        with ProcessPoolExecutor(max_workers=parallel_workers) as executor:
+            future_process_project = { executor.submit(process_project, folder) : folder for folder in folder_list }
+
+            for fpp in as_completed(future_process_project):
+                project_list.append(fpp.result())
+
+            { executor.submit(merge_log_files, project_list, file_name) : file_name for file_name in file_names }
+    else:
+        for folder in folder_list:
+            project = process_project(folder)
             project_list.append(project)
 
-    print(TravisProject.get_csv_header())
+        for file_name in file_names:
+            merge_log_files(project_list, file_name)
 
-    merge_repo_data_files()
-    merge_build_log_files()
+    print("")
+
+    end_time = time.time()
+    print("Extraction done in %s" % (end_time - start_time))
+
+    project_count = len(project_list)
+    job_count = 0
+
+    for project in project_list:
+        job_count += len(project.job_list)
+
+    print("Processed {} projects and {} jobs.".format(project_count, job_count))
 
 
 if __name__ == '__main__':

@@ -119,11 +119,11 @@ class TravisJob:
 
     @staticmethod
     def get_csv_header():
-        return "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}".format(
+        return "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}\n".format(
             "build_number",
             "commit_hash",
             "job_id",
-            "startup_duration",
+            "startup_duration_seconds",
             "worker_hostname",
             "worker_version",
             "worker_instance",
@@ -135,8 +135,8 @@ class TravisJob:
             "travis_fold_worker_info",
             "travis_fold_system_info",
             "travis_fold_count",
-            "step_first_start",
-            "step_last_end",
-            "duration_aggregated_timestamp",
-            "duration_diff_timestamp"
+            "step_first_start_datetime",
+            "step_last_end_datetime",
+            "duration_aggregated_milliseconds",
+            "duration_diff_seconds"
         )
