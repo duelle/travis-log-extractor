@@ -82,17 +82,20 @@ def copy_build_log_file(project_folder):
         remove_tz_label(build_log_source_file, build_log_destination_file)
 
 
-def merge_log_files(project_list, file_name):
+def merge_log_files(folder_list, file_name):
 
     header_added = False
     with open(output_folder + os.sep + file_name, "wb") as out_file:
-        for project in project_list:
-            with open(output_folder + os.sep + project.project_folder + os.sep + file_name, "rb") as in_file:
-                if header_added:
-                    in_file.__next__()
-                else:
-                    header_added = True
-                copyfileobj(in_file, out_file)
+        for project_folder in folder_list:
+            if os.path.isdir(project_folder):
+                with open(output_folder + os.sep + os.path.basename(project_folder) + os.sep + file_name, "rb") as in_file:
+                    if header_added:
+                        in_file.__next__()
+                    else:
+                        header_added = True
+                    copyfileobj(in_file, out_file)
+            else:
+                print(project_folder)
 
 
 def remove_tz_label(source_file, out_file):
@@ -115,8 +118,10 @@ def remove_tz_label(source_file, out_file):
 
 
 def write_to_csv(project):
-    destination_csv_file = output_folder + os.sep + project.project_folder + os.sep + "extracted.csv"
+    destination_csv_file = output_folder + project.project_folder + os.sep + "extracted.csv"
+    print(project.project_folder, "done. Writing to ", destination_csv_file)
     with open(destination_csv_file, 'w') as csv_file:
+
         csv_file.writelines(project.get_as_csv(with_header=True))
 
 
@@ -128,17 +133,41 @@ def main():
     start_time = time.time()
 
     # All folders in the input_folder directory
-    folder_list = [item for item in glob.glob(input_folder + os.sep + "*") if os.path.isdir(item)]
+    xfolder_list = [item for item in glob.glob(input_folder + os.sep + "*") if os.path.isdir(item)]
+    folder_list = ["calabash@calabash-ios",
+                   "assaf@vanity",
+                   "DSpace@DSpace",
+                   "eventmachine@eventmachine",
+                   "fluent@fluentd",
+                   "garethr@garethr-docker",
+                   "GoogleCloudPlatform@DataflowJavaSDK",
+                   "grpc@grpc-java",
+                   "guard@listen",
+                   "Homebrew@homebrew-nginx",
+                   "Homebrew@homebrew-science",
+                   "inaturalist@inaturalist",
+                   "javaslang@javaslang",
+                   "manshar@manshar",
+                   "minimagick@minimagick",
+                   "mockito@mockito",
+                   "openSUSE@open-build-service",
+                   "rails@rails",
+                   "ruboto@ruboto",
+                   "ruby@ruby",
+                   "rubymotion@BubbleWrap",
+                   "SpongePowered@SpongeAPI"]
 
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
 
     if parallel_enabled:
         with ProcessPoolExecutor(max_workers=parallel_workers) as executor:
-            future_process_project = { executor.submit(process_project, folder) : folder for folder in folder_list }
+            future_process_project = \
+                {executor.submit(process_project, 'input' + os.sep + folder):
+                    folder for folder in folder_list}
 
-            for fpp in as_completed(future_process_project):
-                project_list.append(fpp.result())
+    #        for fpp in as_completed(future_process_project):
+    #            project_list.append(fpp.result())
 
             { executor.submit(merge_log_files, project_list, file_name) : file_name for file_name in file_names }
     else:
@@ -146,21 +175,23 @@ def main():
             project = process_project(folder)
             project_list.append(project)
 
-        for file_name in file_names:
-            merge_log_files(project_list, file_name)
+    out_folder_list = [item for item in glob.glob(output_folder + os.sep + "*") if os.path.isdir(item)]
+
+    for file_name in file_names:
+        merge_log_files(out_folder_list, file_name)
 
     print("")
 
     end_time = time.time()
     print("Extraction done in %s" % (end_time - start_time))
 
-    project_count = len(project_list)
-    job_count = 0
+    #project_count = len(project_list)
+    #job_count = 0
 
-    for project in project_list:
-        job_count += len(project.job_list)
+    #for project in project_list:
+    #    job_count += len(project.job_list)
 
-    print("Processed {} projects and {} jobs.".format(project_count, job_count))
+    #print("Processed {} projects and {} jobs.".format(project_count, job_count))
 
 
 if __name__ == '__main__':
